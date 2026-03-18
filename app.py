@@ -20,6 +20,10 @@ DATA_FILE      = "data.csv"
 THRESHOLD      = 0.50
  
 app = Flask(__name__)
+@app.route("/")
+def home():
+    return "API đang chạy "
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
 
@@ -711,9 +715,6 @@ def stats():
         "model": type(model).__name__,
     })
  
-@app.route("/")
-def home():
-    return "API đang chạy "
 
 # ──────────────────────────────────────────────
 if __name__ == "__main__":
