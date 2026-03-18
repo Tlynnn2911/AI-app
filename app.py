@@ -150,7 +150,7 @@ HTML_TEMPLATE = """
 <title>AntiScam Detector</title>
 <style>
   :root {
-    --navy-dark:  #131C35;
+    --navy-dark:  #0F1A30;
     --navy:       #1F3160;
     --navy-mid:   #263D78;
     --navy-light: #2E4A8F;
