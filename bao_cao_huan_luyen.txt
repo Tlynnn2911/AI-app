@@ -1,0 +1,32 @@
+==============================================================
+  BÁO CÁO HUẤN LUYỆN — ANTISCAM DETECTOR
+==============================================================
+
+  Mô hình được chọn : Ensemble (LR+RF)
+  Accuracy (test)   : 0.9707
+  AUC-ROC  (test)   : 0.9971
+
+──────────────────────────────────────────────────────────────
+  Classification Report:
+              precision    recall  f1-score   support
+
+       CLEAN     0.9610    0.9610    0.9610        77
+        SCAM     0.9766    0.9766    0.9766       128
+
+    accuracy                         0.9707       205
+   macro avg     0.9688    0.9688    0.9688       205
+weighted avg     0.9707    0.9707    0.9707       205
+
+──────────────────────────────────────────────────────────────
+  Confusion Matrix:
+              Pred CLEAN   Pred SCAM
+  True CLEAN         74           3
+  True SCAM           3         125
+
+──────────────────────────────────────────────────────────────
+  Kết quả Cross-Validation (toàn bộ):
+  Mô hình                       Acc       F1      AUC
+  Logistic Regression       0.9780   0.9767   0.9966
+  Random Forest             0.9646   0.9617   0.9958
+  Ensemble (LR+RF)          0.9829   0.9817   0.9977
+==============================================================
