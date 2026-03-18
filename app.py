@@ -9,9 +9,9 @@ from scipy.sparse import hstack, csr_matrix
 import xu_ly_dl as xldl
 import xu_ly_fe  as xfe
  
-
+ 
 # Cấu hình
-
+ 
 MODEL_FILE     = "model.pkl"
 VEC_FILE       = "vectorizer.pkl"
 SCALER_FILE    = "scaler.pkl"
@@ -20,15 +20,9 @@ DATA_FILE      = "data.csv"
 THRESHOLD      = 0.50
  
 app = Flask(__name__)
-@app.route("/")
-def home():
-    return "API đang chạy "
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
+ 
 # Tải mô hình khi khởi động
-
+ 
 def load_artifacts():
     """Tải model + vectorizer + scaler; tự huấn luyện nếu chưa có."""
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
@@ -58,9 +52,9 @@ try:
 except Exception:
     df_data = pd.DataFrame(columns=["Sub_Content", "Label", "Reason"])
  
-
+ 
 # Tiền xử lý & dự đoán
-
+ 
 def preprocess_one(text: str):
     """Làm sạch → vector hoá → sparse matrix 1 dòng."""
     cleaned = xldl.clean_text(text)
@@ -109,7 +103,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
  
  
 # Phát hiện dấu hiệu lừa đảo cụ thể
-
+ 
 _SIGNAL_CHECKS = [
     (r"chuyển khoản|nộp phí|đặt cọc",              " Yêu cầu chuyển tiền / nộp phí"),
     (r"click link|link lạ|link giả|bit\.ly",        " Chứa đường link đáng ngờ"),
@@ -140,7 +134,7 @@ def _detect_signals(text: str) -> list:
  
  
 # Giao diện HTML (inline template)
-
+ 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -668,7 +662,7 @@ renderDB();
  
  
 # Flask routes
-
+ 
 @app.route("/")
 def index():
     """Trang chủ — trả HTML với dữ liệu mẫu nhúng sẵn."""
@@ -715,11 +709,9 @@ def stats():
         "model": type(model).__name__,
     })
  
-
+ 
 # ──────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print("Server is running...")
     app.run(host="0.0.0.0", port=port)
-
- 

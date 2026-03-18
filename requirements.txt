@@ -4,4 +4,6 @@ numpy
 scipy
 scikit-learn
 joblib
+openpyxl
 gunicorn
+ 
