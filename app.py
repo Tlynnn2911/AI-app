@@ -151,11 +151,12 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     scam_prob = float(proba[1])
  
     if is_telecom:
-        # Luôn CLEAN, P(CLEAN) tối thiểu 70%
-        label      = "CLEAN"
-        clean_prob = max(1.0 - scam_prob, 0.70)
-        scam_prob  = 1.0 - clean_prob
-        confidence = clean_prob
+        # Luôn CLEAN, P(SCAM) giảm còn 30% giá trị gốc → % thay đổi theo từng tin
+        label             = "CLEAN"
+        scam_prob_display = scam_prob * 0.3
+        clean_prob        = 1.0 - scam_prob_display
+        scam_prob         = scam_prob_display
+        confidence        = clean_prob
     else:
         label      = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
         confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
@@ -809,3 +810,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+ 
