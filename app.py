@@ -138,36 +138,35 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     if safe_hits:
         effective_threshold = max(threshold, 0.72)
 
-    # ── Override: tin nhắn nhà mạng không có hành động nguy hiểm → nâng threshold cao ──
-    DANGEROUS_PATTERNS = [
-        r"chuyển khoản", r"nộp phí", r"đặt cọc", r"mượn tiền",
-        r"bit\.ly|tinyurl|cutt\.ly|\.top|\.xyz|dang-nhap|xac-thuc",
-        r"tuyệt mật|không được tiết lộ",
-        r"công an.*thông báo|khởi tố",
-        r"rửa tiền|phong tỏa tài khoản",
-        r"lợi nhuận \d+%|cam kết hoàn vốn",
-        r"trúng thưởng.*nhận ngay|học bổng.*chuyển khoản",
+    # ── Override: có tên nhà mạng/thương hiệu → luôn CLEAN ──
+    TELECOM_BRANDS = [
+        "viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt",
+        "fpt", "shopee", "tiki", "lazada", "grab", "samsung",
+        "vietcombank", "agribank", "techcombank", "bidv", "mbbank", "sacombank",
     ]
-    TELECOM_BRANDS = ["viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt"]
-
     is_telecom = any(b in lower_text for b in TELECOM_BRANDS)
-    has_danger = any(re.search(p, lower_text) for p in DANGEROUS_PATTERNS)
-
-    if is_telecom and not has_danger:
-        effective_threshold = 0.999  # Tin nhà mạng sạch → luôn CLEAN
 
     X         = preprocess_one(text)
     proba     = model.predict_proba(X)[0]
     scam_prob = float(proba[1])
-    label     = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
-    confidence= scam_prob if label == "SCAM" else 1.0 - scam_prob
+
+    if is_telecom:
+        # Luôn CLEAN, P(CLEAN) tối thiểu 70%
+        label      = "CLEAN"
+        clean_prob = max(1.0 - scam_prob, 0.70)
+        scam_prob  = 1.0 - clean_prob
+        confidence = clean_prob
+    else:
+        label      = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
+        confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
+        clean_prob = 1.0 - scam_prob
 
     signals = _detect_signals(text, safe_hits=safe_hits)
 
     result = {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
-        "clean_prob": round((1 - scam_prob) * 100, 1),
+        "clean_prob": round(clean_prob * 100, 1),
         "confidence": round(confidence * 100, 1),
         "signals":    signals,
     }
