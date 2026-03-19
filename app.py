@@ -93,6 +93,15 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     confidence= scam_prob if label == "SCAM" else 1.0 - scam_prob
  
     signals = _detect_signals(text)
+
+    if signals:
+      print("⚠️ Có dấu hiệu lừa đảo:")
+    for s in signals:
+        print("-", s)
+    else:
+      print("✅ Nội dung an toàn")
+
+
     return {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
@@ -128,8 +137,7 @@ def _detect_signals(text: str) -> list:
     for pattern, msg in _SIGNAL_CHECKS:
         if re.search(pattern, lower):
             signals.append(msg)
-    if not signals:
-        signals.append(" Không phát hiện dấu hiệu lừa đảo rõ ràng")
+
     return signals
  
  
