@@ -40,17 +40,31 @@ def load_artifacts():
     if os.path.exists(V2_BUNDLE_FILE):
         try:
             v2 = joblib.load(V2_BUNDLE_FILE)
-            # v2 chỉ cung cấp safe_keywords + detection_brain (whitelist/pattern)
-            # Model + vectorizer + scaler vẫn dùng file pkl riêng lẻ
+            mdl        = v2["model"]
+            vec        = v2.get("vectorizer", None)
+            scl        = v2.get("scaler", None)
+            fc         = v2.get("feature_columns", None)
             _v2_safe_keywords   = v2.get("safe_keywords", [])
             _v2_detection_brain = v2.get("detection_brain", {})
             _using_v2 = True
             print(f"  [v2] Loaded scamsense_full_package_v2.pkl — version: {v2.get('version','?')}")
-            print(f"  [v2] safe_keywords: {len(_v2_safe_keywords)}, categories: {len(_v2_detection_brain)}")
+            print(f"  [v2] Model: {type(mdl).__name__}, safe_keywords: {len(_v2_safe_keywords)}, categories: {len(_v2_detection_brain)}")
+
+            # Nếu v2 bundle không có vectorizer/scaler riêng → dùng file ngoài
+            if vec is None and os.path.exists(VEC_FILE):
+                vec = joblib.load(VEC_FILE)
+            if scl is None and os.path.exists(SCALER_FILE):
+                scl = joblib.load(SCALER_FILE)
+            if fc is None and os.path.exists(FEAT_COLS_FILE):
+                fc  = joblib.load(FEAT_COLS_FILE)
+
+            return mdl, vec, scl, fc
+
         except Exception as e:
             print(f"  [!] Không load được v2 bundle: {e}")
+            print(f"  [!] Fallback về các file pkl riêng lẻ ...")
 
-    # ── Luôn load model/vectorizer/scaler từ file pkl riêng lẻ ──
+    # ── Fallback: load file pkl riêng lẻ ──
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
                if not os.path.exists(f)]
     if missing:
@@ -138,38 +152,41 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     if safe_hits:
         effective_threshold = max(threshold, 0.72)
 
-    # ── Override: có tên nhà mạng/thương hiệu → luôn CLEAN ──
-    TELECOM_BRANDS = [
-        "viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt",
-        "fpt", "shopee", "tiki", "lazada", "grab", "samsung",
-        "vietcombank", "agribank", "techcombank", "bidv", "mbbank", "sacombank",
+    # ── Override: tin nhắn nhà mạng không có hành động nguy hiểm → nâng threshold cao ──
+    DANGEROUS_PATTERNS = [
+        r"chuyển khoản", r"nộp phí", r"đặt cọc", r"mượn tiền",
+        r"bit\.ly|tinyurl|cutt\.ly|\.top|\.xyz|dang-nhap|xac-thuc",
+        r"tuyệt mật|không được tiết lộ",
+        r"công an.*thông báo|khởi tố",
+        r"rửa tiền|phong tỏa tài khoản",
+        r"lợi nhuận \d+%|cam kết hoàn vốn",
+        r"trúng thưởng.*nhận ngay|học bổng.*chuyển khoản",
     ]
+    TELECOM_BRANDS = ["viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt"]
+
     is_telecom = any(b in lower_text for b in TELECOM_BRANDS)
+    has_danger = any(re.search(p, lower_text) for p in DANGEROUS_PATTERNS)
+
+    if is_telecom and not has_danger:
+        effective_threshold = 0.92
 
     X         = preprocess_one(text)
     proba     = model.predict_proba(X)[0]
     scam_prob = float(proba[1])
-
-    if is_telecom:
-        # Luôn CLEAN, P(CLEAN) tối thiểu 70%
-        label      = "CLEAN"
-        clean_prob = max(1.0 - scam_prob, 0.70)
-        scam_prob  = 1.0 - clean_prob
-        confidence = clean_prob
-    else:
-        label      = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
-        confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
-        clean_prob = 1.0 - scam_prob
+    label     = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
+    confidence= scam_prob if label == "SCAM" else 1.0 - scam_prob
 
     signals = _detect_signals(text, safe_hits=safe_hits)
 
     result = {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
-        "clean_prob": round(clean_prob * 100, 1),
+        "clean_prob": round((1 - scam_prob) * 100, 1),
         "confidence": round(confidence * 100, 1),
         "signals":    signals,
     }
+    if safe_hits:
+        result["safe_note"] = f"Phát hiện nguồn tin cậy: {', '.join(set(safe_hits))}"
     return result
  
  
@@ -214,6 +231,9 @@ def _detect_signals(text: str, safe_hits: list = None) -> list:
         if re.search(pattern, lower):
             signals.append(msg)
     # Nếu có nguồn an toàn được nhận diện → thêm ghi chú tích cực
+    if safe_hits:
+        unique = list(dict.fromkeys(h for h in safe_hits if h))
+        signals.insert(0, f"✅ Nhận diện nguồn tin cậy: {', '.join(unique[:3])}")
     return signals
  
  
