@@ -21,7 +21,7 @@ DATA_FILE      = "data.csv"
 THRESHOLD      = 0.50
  
 app = Flask(__name__)
- 
+
 # ── Biến toàn cục cho v2 bundle ──
 _v2_safe_keywords   = []   # Từ khoá an toàn (whitelist) từ v2
 _v2_detection_brain = {}   # Category patterns từ v2
@@ -35,36 +35,22 @@ def load_artifacts():
     Fallback về các file pkl riêng lẻ nếu thiếu XGBoost.
     """
     global _v2_safe_keywords, _v2_detection_brain, _using_v2
- 
+
     # ── Thử load v2 bundle trước ──
     if os.path.exists(V2_BUNDLE_FILE):
         try:
             v2 = joblib.load(V2_BUNDLE_FILE)
-            mdl        = v2["model"]
-            vec        = v2.get("vectorizer", None)
-            scl        = v2.get("scaler", None)
-            fc         = v2.get("feature_columns", None)
+            # v2 chỉ cung cấp safe_keywords + detection_brain (whitelist/pattern)
+            # Model + vectorizer + scaler vẫn dùng file pkl riêng lẻ
             _v2_safe_keywords   = v2.get("safe_keywords", [])
             _v2_detection_brain = v2.get("detection_brain", {})
             _using_v2 = True
             print(f"  [v2] Loaded scamsense_full_package_v2.pkl — version: {v2.get('version','?')}")
-            print(f"  [v2] Model: {type(mdl).__name__}, safe_keywords: {len(_v2_safe_keywords)}, categories: {len(_v2_detection_brain)}")
- 
-            # Nếu v2 bundle không có vectorizer/scaler riêng → dùng file ngoài
-            if vec is None and os.path.exists(VEC_FILE):
-                vec = joblib.load(VEC_FILE)
-            if scl is None and os.path.exists(SCALER_FILE):
-                scl = joblib.load(SCALER_FILE)
-            if fc is None and os.path.exists(FEAT_COLS_FILE):
-                fc  = joblib.load(FEAT_COLS_FILE)
- 
-            return mdl, vec, scl, fc
- 
+            print(f"  [v2] safe_keywords: {len(_v2_safe_keywords)}, categories: {len(_v2_detection_brain)}")
         except Exception as e:
             print(f"  [!] Không load được v2 bundle: {e}")
-            print(f"  [!] Fallback về các file pkl riêng lẻ ...")
- 
-    # ── Fallback: load file pkl riêng lẻ ──
+
+    # ── Luôn load model/vectorizer/scaler từ file pkl riêng lẻ ──
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
                if not os.path.exists(f)]
     if missing:
@@ -74,7 +60,7 @@ def load_artifacts():
         xu_ly_fe.run()
         label_scaler.run()
         huan_luyen.run()
- 
+
     bundle     = joblib.load(MODEL_FILE)
     vectorizer = joblib.load(VEC_FILE)
     scaler     = joblib.load(SCALER_FILE)
@@ -130,7 +116,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     # ── Whitelist check từ v2 safe_keywords ──
     effective_threshold = threshold
     lower_text = text.lower()
- 
+
     # Whitelist tích hợp sẵn cho nhà mạng & thương hiệu hợp lệ
     BUILTIN_SAFE = [
         "viettel", "vinaphone", "mobifone", "vietnamobile",
@@ -140,7 +126,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
         "shopee", "tiki", "lazada", "grab", "be food",
         "samsung", "fpt software", "lalamove",
     ]
- 
+
     safe_hits = []
     for kw in _v2_safe_keywords:
         if isinstance(kw, str) and kw.lower() in lower_text:
@@ -148,10 +134,10 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     for kw in BUILTIN_SAFE:
         if kw in lower_text:
             safe_hits.append(kw)
- 
+
     if safe_hits:
         effective_threshold = max(threshold, 0.72)
- 
+
     # ── Override: tin nhắn nhà mạng không có hành động nguy hiểm → nâng threshold cao ──
     DANGEROUS_PATTERNS = [
         r"chuyển khoản", r"nộp phí", r"đặt cọc", r"mượn tiền",
@@ -163,21 +149,21 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
         r"trúng thưởng.*nhận ngay|học bổng.*chuyển khoản",
     ]
     TELECOM_BRANDS = ["viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt"]
- 
+
     is_telecom = any(b in lower_text for b in TELECOM_BRANDS)
     has_danger = any(re.search(p, lower_text) for p in DANGEROUS_PATTERNS)
- 
+
     if is_telecom and not has_danger:
-        effective_threshold = 0.92
- 
+        effective_threshold = 0.999  # Tin nhà mạng sạch → luôn CLEAN
+
     X         = preprocess_one(text)
     proba     = model.predict_proba(X)[0]
     scam_prob = float(proba[1])
     label     = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
     confidence= scam_prob if label == "SCAM" else 1.0 - scam_prob
- 
+
     signals = _detect_signals(text, safe_hits=safe_hits)
- 
+
     result = {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
@@ -223,7 +209,7 @@ _SIGNAL_CHECKS = [
     (r"liên hệ.*nhận tiền|ấn ngay.*nhận thưởng|click.*nhận ngay",
                                                      "⚠️ Lời kêu gọi hành động đáng ngờ"),
 ]
- 
+
 def _detect_signals(text: str, safe_hits: list = None) -> list:
     signals = []
     lower   = text.lower()
@@ -829,4 +815,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+ 
  
