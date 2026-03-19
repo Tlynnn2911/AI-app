@@ -9,9 +9,9 @@ from scipy.sparse import hstack, csr_matrix
 import xu_ly_dl as xldl
 import xu_ly_fe  as xfe
  
-
+ 
 # Cấu hình
-
+ 
 MODEL_FILE     = "model.pkl"
 VEC_FILE       = "vectorizer.pkl"
 SCALER_FILE    = "scaler.pkl"
@@ -20,9 +20,9 @@ DATA_FILE      = "data.csv"
 THRESHOLD      = 0.50
  
 app = Flask(__name__)
-
+ 
 # Tải mô hình khi khởi động
-
+ 
 def load_artifacts():
     """Tải model + vectorizer + scaler; tự huấn luyện nếu chưa có."""
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
@@ -52,9 +52,9 @@ try:
 except Exception:
     df_data = pd.DataFrame(columns=["Sub_Content", "Label", "Reason"])
  
-
+ 
 # Tiền xử lý & dự đoán
-
+ 
 def preprocess_one(text: str):
     """Làm sạch → vector hoá → sparse matrix 1 dòng."""
     cleaned = xldl.clean_text(text)
@@ -103,7 +103,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
  
  
 # Phát hiện dấu hiệu lừa đảo cụ thể
-
+ 
 _SIGNAL_CHECKS = [
     (r"chuyển khoản|nộp phí|đặt cọc",              " Yêu cầu chuyển tiền / nộp phí"),
     (r"click link|link lạ|link giả|bit\.ly",        " Chứa đường link đáng ngờ"),
@@ -134,7 +134,7 @@ def _detect_signals(text: str) -> list:
  
  
 # Giao diện HTML (inline template)
-
+ 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="vi">
@@ -144,18 +144,18 @@ HTML_TEMPLATE = """
 <title>AntiScam Detector</title>
 <style>
   :root {
-    --navy-dark:  #E8EBF2;
-    --navy:       #1F3160;
-    --navy-mid:   #263D78;
-    --navy-light: #2E4A8F;
-    --navy-card:  #223070;
+    --navy-dark:  #2A3F6F;
+    --navy:       #2E4A8F;
+    --navy-mid:   #3558A8;
+    --navy-light: #3D66BF;
+    --navy-card:  #2D4D96;
     --navy-row:   #9acbff;
     --orange:     #F5A623;
     --orange2:    #E8941A;
     --orange3:    #D4820F;
     --orange-bg:  rgba(245,166,35,.12);
     --orange-bd:  rgba(245,166,35,.35);
-    --text:       #FFFFFF
+    --text:       #FFFFFF;
     --text-dim:   rgba(255,255,255,.7);
     --text-muted: rgba(255,255,255,.42);
     --border:     rgba(255,255,255,.1);
@@ -177,7 +177,7 @@ HTML_TEMPLATE = """
  
   /* ── HEADER ── */
   header {
-    background: linear-gradient(135deg, #1A2744 0%, #1F3160 60%, #263D78 100%);
+    background: linear-gradient(135deg, #2A3F6F 0%, #2E4A8F 60%, #3558A8 100%);
     border-bottom: 2px solid var(--orange);
     padding: .875rem 2rem;
     display: flex; align-items: center; gap: 1rem;
@@ -328,7 +328,7 @@ HTML_TEMPLATE = """
   .spin-text { font-size: .8rem; color: var(--text-muted); }
  
   /* ── DATABASE ── */
-  .section-title { font-size: .95rem; font-weight: 700; margin-bottom: .875rem; color: #fff; }
+  .section-title { font-size: .95rem; font-weight: 700; margin-bottom: .875rem; color: var(--orange); }
   .search-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .875rem; align-items: center; }
   .search-box {
     flex: 1; min-width: 200px;
@@ -662,7 +662,7 @@ renderDB();
  
  
 # Flask routes
-
+ 
 @app.route("/")
 def index():
     """Trang chủ — trả HTML với dữ liệu mẫu nhúng sẵn."""
@@ -709,11 +709,10 @@ def stats():
         "model": type(model).__name__,
     })
  
-
+ 
 # ──────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
     app.run(host="0.0.0.0", port=port)
-
  
