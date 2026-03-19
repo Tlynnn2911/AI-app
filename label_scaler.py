@@ -5,9 +5,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
 from scipy.sparse import hstack, csr_matrix, save_npz
  
-# ──────────────────────────────────────────────
+
 # Cấu hình
-# ──────────────────────────────────────────────
 INPUT_FILE      = "2du_lieu_FE.csv"
 OUTPUT_REF_CSV  = "3du_lieu_da_ma_hoa.csv"   # CSV tham chiếu (không dùng cho training)
 VEC_FILE        = "vectorizer.pkl"
