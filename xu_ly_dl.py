@@ -70,7 +70,8 @@ def run(input_file: str = INPUT_FILE, output_file: str = OUTPUT_FILE) -> pd.Data
     print("\n[2/3] Làm sạch văn bản ...")
     df = remove_invalid_rows(df)
     df["Sub_Content_clean"] = df["Sub_Content"].apply(clean_text)
-    df["Reason"] = df["Reason"].fillna("").str.strip()
+    if "Reason" in df.columns:
+        df["Reason"] = df["Reason"].fillna("").str.strip()
  
     counts = df["Label"].value_counts()
     total  = len(df)
@@ -86,5 +87,8 @@ def run(input_file: str = INPUT_FILE, output_file: str = OUTPUT_FILE) -> pd.Data
     return df
  
  
+def process_data():
+    return run()
+
 if __name__ == "__main__":
     run()
