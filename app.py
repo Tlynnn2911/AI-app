@@ -170,8 +170,6 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
         "confidence": round(confidence * 100, 1),
         "signals":    signals,
     }
-    if safe_hits:
-        result["safe_note"] = f"Phát hiện nguồn tin cậy: {', '.join(set(safe_hits))}"
     return result
  
  
@@ -216,9 +214,6 @@ def _detect_signals(text: str, safe_hits: list = None) -> list:
         if re.search(pattern, lower):
             signals.append(msg)
     # Nếu có nguồn an toàn được nhận diện → thêm ghi chú tích cực
-    if safe_hits:
-        unique = list(dict.fromkeys(h for h in safe_hits if h))
-        signals.insert(0, f"✅ Nhận diện nguồn tin cậy: {', '.join(unique[:3])}")
     return signals
  
  
