@@ -514,7 +514,7 @@ const EXAMPLES = {
   clean1: \'Các tân sinh viên K70 thân mến! Thông tin chính thức về thủ tục nhập học được đăng trên cổng thông tin: https://hus.vnu.edu.vn. Phòng Công tác sinh viên luôn sẵn sàng hỗ trợ tại cơ sở 334 Nguyễn Trãi. Tất cả câu lạc bộ chính thức đều KHÔNG thu bất kỳ lệ phí gia nhập nào.\'
 };
  
-const DB_DATA = {{ db_data | safe }};
+const DB_DATA = JSON.parse('{{ db_data | tojson | safe }}');
 let dbFilter = \'all\', dbSearch = \'\', dbPage = 1;
 const PAGE_SIZE = 12;
  
@@ -714,5 +714,5 @@ def stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port,debug=True)
  
