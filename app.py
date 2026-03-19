@@ -23,12 +23,10 @@ THRESHOLD      = 0.50
 app = Flask(__name__)
  
 # ── Biến toàn cục cho v2 bundle ──
-_v2_safe_keywords   = []   # Từ khoá an toàn (whitelist) từ v2
-_v2_detection_brain = {}   # Category patterns từ v2
+_v2_safe_keywords   = []   
+_v2_detection_brain = {}  
 _using_v2           = False
- 
-# Tải mô hình khi khởi động
- 
+
 def load_artifacts():
     """
     Ưu tiên load scamsense_full_package_v2.pkl (XGBoost bundle).
@@ -36,12 +34,10 @@ def load_artifacts():
     """
     global _v2_safe_keywords, _v2_detection_brain, _using_v2
  
-    # ── Thử load v2 bundle trước ──
+
     if os.path.exists(V2_BUNDLE_FILE):
         try:
             v2 = joblib.load(V2_BUNDLE_FILE)
-            # v2 chỉ cung cấp safe_keywords + detection_brain (whitelist/pattern)
-            # Model + vectorizer + scaler vẫn dùng file pkl riêng lẻ
             _v2_safe_keywords   = v2.get("safe_keywords", [])
             _v2_detection_brain = v2.get("detection_brain", {})
             _using_v2 = True
@@ -50,7 +46,7 @@ def load_artifacts():
         except Exception as e:
             print(f"  [!] Không load được v2 bundle: {e}")
  
-    # ── Luôn load model/vectorizer/scaler từ file pkl riêng lẻ ──
+
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
                if not os.path.exists(f)]
     if missing:
@@ -85,7 +81,6 @@ def preprocess_one(text: str):
     """Làm sạch → vector hoá → sparse matrix 1 dòng."""
     cleaned = xldl.clean_text(text)
  
-    # Tạo DataFrame tạm để extract_features hoạt động đúng
     row = pd.DataFrame([{
         "Sub_Content":       text,
         "Sub_Content_clean": cleaned,
@@ -113,11 +108,10 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     - Áp dụng safe_keywords whitelist từ v2 để giảm false positive (Viettel, Grab, v.v.)
     - Trả về: label, scam_prob, clean_prob, confidence, signals
     """
-    # ── Whitelist check từ v2 safe_keywords ──
+
     effective_threshold = threshold
     lower_text = text.lower()
  
-    # Whitelist tích hợp sẵn cho nhà mạng & thương hiệu hợp lệ
     BUILTIN_SAFE = [
         "viettel", "vinaphone", "mobifone", "vietnamobile",
         "gmobile", "indochina telecom",
@@ -138,7 +132,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     if safe_hits:
         effective_threshold = max(threshold, 0.72)
  
-    # ── Override: có tên nhà mạng/thương hiệu → luôn CLEAN ──
+
     TELECOM_BRANDS = [
         "viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt",
         "fpt", "shopee", "tiki", "lazada", "grab", "samsung",
@@ -151,7 +145,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     scam_prob = float(proba[1])
  
     if is_telecom:
-        # Luôn CLEAN, P(SCAM) giảm còn 30% giá trị gốc → % thay đổi theo từng tin
+
         label             = "CLEAN"
         scam_prob_display = scam_prob * 0.3
         clean_prob        = 1.0 - scam_prob_display
