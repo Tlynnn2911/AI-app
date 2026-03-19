@@ -144,11 +144,11 @@ HTML_TEMPLATE = """
 <title>AntiScam Detector</title>
 <style>
   :root {
-    --navy-dark:  #2A3F6F;
+    --navy-dark:  #243660;
     --navy:       #2E4A8F;
     --navy-mid:   #3558A8;
     --navy-light: #3D66BF;
-    --navy-card:  #2D4D96;
+    --navy-card:  #2A4585;
     --navy-row:   #9acbff;
     --orange:     #F5A623;
     --orange2:    #E8941A;
@@ -177,7 +177,7 @@ HTML_TEMPLATE = """
  
   /* ── HEADER ── */
   header {
-    background: linear-gradient(135deg, #2A3F6F 0%, #2E4A8F 60%, #3558A8 100%);
+    background: linear-gradient(135deg, #1E2F58 0%, #2A4585 60%, #3558A8 100%);
     border-bottom: 2px solid var(--orange);
     padding: .875rem 2rem;
     display: flex; align-items: center; gap: 1rem;
@@ -514,7 +514,7 @@ const EXAMPLES = {
   clean1: \'Các tân sinh viên K70 thân mến! Thông tin chính thức về thủ tục nhập học được đăng trên cổng thông tin: https://hus.vnu.edu.vn. Phòng Công tác sinh viên luôn sẵn sàng hỗ trợ tại cơ sở 334 Nguyễn Trãi. Tất cả câu lạc bộ chính thức đều KHÔNG thu bất kỳ lệ phí gia nhập nào.\'
 };
  
-const DB_DATA = JSON.parse('{{ db_data | tojson | safe }}');
+const DB_DATA = {{ db_data | safe }};
 let dbFilter = \'all\', dbSearch = \'\', dbPage = 1;
 const PAGE_SIZE = 12;
  
@@ -714,5 +714,6 @@ def stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
-    app.run(host="0.0.0.0", port=port,debug=True)
+    app.run(host="0.0.0.0", port=port)
+ 
  
