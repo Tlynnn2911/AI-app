@@ -144,8 +144,8 @@ HTML_TEMPLATE = """
 <title>AntiScam Detector</title>
 <style>
   :root {
-    --navy-dark:  #7AA4E2;
-    --navy:      #8AB4ED;
+    --navy-dark:  #2D4A7A;
+    --navy:       #35578F;
     --navy-mid:   #3558A8;
     --navy-light: #3D66BF;
     --navy-card:  #2A4585;
@@ -714,6 +714,6 @@ def stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=True)
+    app.run(host="0.0.0.0", port=port, debug=False, )
  
  
