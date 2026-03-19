@@ -12,6 +12,7 @@ import xu_ly_fe  as xfe
  
 # Cấu hình
  
+V2_BUNDLE_FILE = "scamsense_full_package_v2.pkl"
 MODEL_FILE     = "model.pkl"
 VEC_FILE       = "vectorizer.pkl"
 SCALER_FILE    = "scaler.pkl"
@@ -21,10 +22,49 @@ THRESHOLD      = 0.50
  
 app = Flask(__name__)
  
+# ── Biến toàn cục cho v2 bundle ──
+_v2_safe_keywords   = []   # Từ khoá an toàn (whitelist) từ v2
+_v2_detection_brain = {}   # Category patterns từ v2
+_using_v2           = False
+ 
 # Tải mô hình khi khởi động
  
 def load_artifacts():
-    """Tải model + vectorizer + scaler; tự huấn luyện nếu chưa có."""
+    """
+    Ưu tiên load scamsense_full_package_v2.pkl (XGBoost bundle).
+    Fallback về các file pkl riêng lẻ nếu thiếu XGBoost.
+    """
+    global _v2_safe_keywords, _v2_detection_brain, _using_v2
+ 
+    # ── Thử load v2 bundle trước ──
+    if os.path.exists(V2_BUNDLE_FILE):
+        try:
+            v2 = joblib.load(V2_BUNDLE_FILE)
+            mdl        = v2["model"]
+            vec        = v2.get("vectorizer", None)
+            scl        = v2.get("scaler", None)
+            fc         = v2.get("feature_columns", None)
+            _v2_safe_keywords   = v2.get("safe_keywords", [])
+            _v2_detection_brain = v2.get("detection_brain", {})
+            _using_v2 = True
+            print(f"  [v2] Loaded scamsense_full_package_v2.pkl — version: {v2.get('version','?')}")
+            print(f"  [v2] Model: {type(mdl).__name__}, safe_keywords: {len(_v2_safe_keywords)}, categories: {len(_v2_detection_brain)}")
+ 
+            # Nếu v2 bundle không có vectorizer/scaler riêng → dùng file ngoài
+            if vec is None and os.path.exists(VEC_FILE):
+                vec = joblib.load(VEC_FILE)
+            if scl is None and os.path.exists(SCALER_FILE):
+                scl = joblib.load(SCALER_FILE)
+            if fc is None and os.path.exists(FEAT_COLS_FILE):
+                fc  = joblib.load(FEAT_COLS_FILE)
+ 
+            return mdl, vec, scl, fc
+ 
+        except Exception as e:
+            print(f"  [!] Không load được v2 bundle: {e}")
+            print(f"  [!] Fallback về các file pkl riêng lẻ ...")
+ 
+    # ── Fallback: load file pkl riêng lẻ ──
     missing = [f for f in [MODEL_FILE, VEC_FILE, SCALER_FILE, FEAT_COLS_FILE]
                if not os.path.exists(f)]
     if missing:
@@ -43,7 +83,7 @@ def load_artifacts():
  
  
 model, vectorizer, scaler, feat_cols = load_artifacts()
-print(f" Model sẵn sàng: {type(model).__name__}")
+print(f" Model sẵn sàng: {type(model).__name__} | v2={'YES' if _using_v2 else 'NO'}")
  
 # Tải dữ liệu mẫu để hiển thị lịch sử / autocomplete
 try:
@@ -84,52 +124,98 @@ def preprocess_one(text: str):
 def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     """
     Dự đoán 1 văn bản.
-    Trả về: label, scam_prob, clean_prob, confidence, signals
+    - Áp dụng safe_keywords whitelist từ v2 để giảm false positive (Viettel, Grab, v.v.)
+    - Trả về: label, scam_prob, clean_prob, confidence, signals
     """
+    # ── Whitelist check từ v2 safe_keywords ──
+    effective_threshold = threshold
+    lower_text = text.lower()
+ 
+    # Whitelist tích hợp sẵn cho nhà mạng & thương hiệu hợp lệ
+    BUILTIN_SAFE = [
+        "viettel", "vinaphone", "mobifone", "vietnamobile",
+        "gmobile", "indochina telecom",
+        "fpt", "vnpt", "evn", "vietcombank", "agribank",
+        "techcombank", "bidv", "sacombank", "mbbank",
+        "shopee", "tiki", "lazada", "grab", "be food",
+        "samsung", "fpt software", "lalamove",
+    ]
+ 
+    safe_hits = []
+    for kw in _v2_safe_keywords:
+        if isinstance(kw, str) and kw.lower() in lower_text:
+            safe_hits.append(kw)
+    for kw in BUILTIN_SAFE:
+        if kw in lower_text:
+            safe_hits.append(kw)
+ 
+    if safe_hits:
+        effective_threshold = max(threshold, 0.72)
+ 
     X         = preprocess_one(text)
-    proba     = model.predict_proba(X)[0]          # [P(CLEAN), P(SCAM)]
+    proba     = model.predict_proba(X)[0]
     scam_prob = float(proba[1])
-    label     = "SCAM" if scam_prob >= threshold else "CLEAN"
+    label     = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
     confidence= scam_prob if label == "SCAM" else 1.0 - scam_prob
  
-    signals = _detect_signals(text)
-    
-    return {
+    signals = _detect_signals(text, safe_hits=safe_hits)
+ 
+    result = {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
         "clean_prob": round((1 - scam_prob) * 100, 1),
         "confidence": round(confidence * 100, 1),
         "signals":    signals,
     }
+    if safe_hits:
+        result["safe_note"] = f"Phát hiện nguồn tin cậy: {', '.join(set(safe_hits))}"
+    return result
  
  
 # Phát hiện dấu hiệu lừa đảo cụ thể
  
 _SIGNAL_CHECKS = [
-    (r"chuyển khoản|nộp phí|đặt cọc",              " Yêu cầu chuyển tiền / nộp phí"),
-    (r"click link|link lạ|link giả|bit\.ly",        " Chứa đường link đáng ngờ"),
-    (r"ngay lập tức|khẩn cấp|gấp|hôm nay",         " Tạo áp lực thời gian khẩn cấp"),
-    (r"tuyệt mật|không được tiết lộ|bí mật",        " Yêu cầu giữ bí mật"),
-    (r"công an|tòa án|viện kiểm sát|hải quan",      " Giả danh cơ quan chức năng"),
-    (r"lãi suất 0%|không lãi suất",                 " Mời vay lãi suất 0% không thực tế"),
-    (r"việc nhẹ lương cao|thu nhập.*triệu.*ngày",   " Việc nhẹ lương cao bất thường"),
-    (r"lợi nhuận.*%|cam kết hoàn vốn|nạp tiền",    " Đầu tư lợi nhuận phi thực tế"),
-    (r"\bcccd\b|\bcmnd\b|căn cước",                 " Thu thập giấy tờ tuỳ thân"),
-    (r"rửa tiền|phong tỏa|khởi tố|bắt giữ",        " Đe dọa pháp lý"),
-    (r"trúng thưởng|trúng tuyển|học bổng.*phí",     " Thông báo trúng thưởng / học bổng giả"),
-    (r"hải quan.*phí|phí vận chuyển",               " Giả mạo phí hải quan / vận chuyển"),
-    (r"đầu tư|lợi nhuận|hoa hồng|lãi suất|sinh lời", " Mời gọi đầu tư sinh lời bất thường"),
-    (r"vay|tiền|ck|chuyển khoản|mai trả|mượn tiền", " Lừa đảo chuyển tiền / cho vay"),
-    (r"thử ngay|ấn ngay|thu ngay|an ngay|lien he|liên hệ", "Đường link / lời kêu gọi hành động đáng ngờ"),
+    (r"chuyển khoản ngay|nộp phí ngay|đặt cọc ngay|chuyển tiền gấp",
+                                                     "⚠️ Yêu cầu chuyển tiền / nộp phí khẩn cấp"),
+    (r"click link|link lạ|link giả|bit\.ly|tinyurl|cutt\.ly|\.top|\.xyz|dang-nhap|xac-thuc",
+                                                     "⚠️ Chứa đường link đáng ngờ"),
+    (r"ngay lập tức|khẩn cấp trong|gấp trong|phải làm ngay hôm nay",
+                                                     "⚠️ Tạo áp lực thời gian khẩn cấp"),
+    (r"tuyệt mật|không được tiết lộ cho bất kỳ ai|bí mật tuyệt đối",
+                                                     "⚠️ Yêu cầu giữ bí mật"),
+    (r"công an.*thông báo|tòa án.*yêu cầu|viện kiểm sát.*khởi tố|hải quan.*phong tỏa",
+                                                     "⚠️ Giả danh cơ quan chức năng"),
+    (r"lãi suất 0%|không lãi suất.*vay",            "⚠️ Mời vay lãi suất 0% không thực tế"),
+    (r"việc nhẹ lương cao|thu nhập \d+.*triệu.*ngày|không cần kinh nghiệm.*hoa hồng",
+                                                     "⚠️ Việc nhẹ lương cao bất thường"),
+    (r"lợi nhuận \d+%|cam kết hoàn vốn|nạp tiền.*nhận ngay",
+                                                     "⚠️ Đầu tư lợi nhuận phi thực tế"),
+    (r"\bcccd\b|\bcmnd\b|căn cước.*gửi ngay|chụp cmnd",
+                                                     "⚠️ Thu thập giấy tờ tuỳ thân"),
+    (r"rửa tiền|phong tỏa tài khoản|khởi tố hình sự|bắt giữ ngay",
+                                                     "⚠️ Đe dọa pháp lý"),
+    (r"trúng thưởng.*nhận ngay|trúng tuyển.*nộp phí|học bổng.*chuyển khoản",
+                                                     "⚠️ Thông báo trúng thưởng / học bổng giả"),
+    (r"hải quan.*phí.*chuyển khoản|phí vận chuyển.*nộp ngay",
+                                                     "⚠️ Giả mạo phí hải quan / vận chuyển"),
+    (r"đầu tư.*sinh lời.*%|x\d+ tiền|bitcoin.*nạp tiền",
+                                                     "⚠️ Mời gọi đầu tư sinh lời bất thường"),
+    (r"mượn tiền gấp|mai trả|cho mượn.*zalo|vay tiền online.*cccd",
+                                                     "⚠️ Lừa đảo chuyển tiền / cho vay"),
+    (r"liên hệ.*nhận tiền|ấn ngay.*nhận thưởng|click.*nhận ngay",
+                                                     "⚠️ Lời kêu gọi hành động đáng ngờ"),
 ]
  
-def _detect_signals(text: str) -> list:
+def _detect_signals(text: str, safe_hits: list = None) -> list:
     signals = []
     lower   = text.lower()
     for pattern, msg in _SIGNAL_CHECKS:
         if re.search(pattern, lower):
             signals.append(msg)
-
+    # Nếu có nguồn an toàn được nhận diện → thêm ghi chú tích cực
+    if safe_hits:
+        unique = list(dict.fromkeys(h for h in safe_hits if h))
+        signals.insert(0, f"✅ Nhận diện nguồn tin cậy: {', '.join(unique[:3])}")
     return signals
  
  
@@ -580,6 +666,16 @@ function showResult(r) {
     sl.appendChild(d);
   });
   document.getElementById(\'result-content\').style.display = \'block\';
+  // Hiển thị ghi chú nguồn an toàn (nếu có)
+  const noteEl = document.getElementById(\'safe-note\');
+  if (noteEl) {
+    if (r.safe_note) {
+      noteEl.textContent = r.safe_note;
+      noteEl.style.display = \'block\';
+    } else {
+      noteEl.style.display = \'none\';
+    }
+  }
 }
  
 function getFiltered() {
@@ -715,5 +811,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print("Server is running...")
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
- 
  
