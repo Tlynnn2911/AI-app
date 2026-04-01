@@ -18,7 +18,7 @@ VEC_FILE       = "vectorizer.pkl"
 SCALER_FILE    = "scaler.pkl"
 FEAT_COLS_FILE = "feature_columns.pkl"
 DATA_FILE      = "data.csv"
-THRESHOLD      = 0.60
+THRESHOLD      = 0.50
  
 app = Flask(__name__)
  
@@ -108,10 +108,9 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
     - Áp dụng safe_keywords whitelist từ v2 để giảm false positive (Viettel, Grab, v.v.)
     - Trả về: label, scam_prob, clean_prob, confidence, signals
     """
-    if re.search(r"không thu.*phí|miễn phí|không yêu cầu chuyển khoản", lower_text):
-        effective_threshold = max(effective_threshold, 0.75)
-        effective_threshold = threshold
-        lower_text = text.lower()
+
+    effective_threshold = threshold
+    lower_text = text.lower()
  
     BUILTIN_SAFE = [
         "viettel", "vinaphone", "mobifone", "vietnamobile",
@@ -121,11 +120,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
         "shopee", "tiki", "lazada", "grab", "be food",
         "samsung", "fpt software", "lalamove",
     ]
-    EDU_SAFE = [
-    "đại học", "trường", "sinh viên",
-    "nhập học", "tuần sinh hoạt công dân",
-    "cổng thông tin", "website trường"
-  ]
+    
     safe_hits = []
     for kw in _v2_safe_keywords:
         if isinstance(kw, str) and kw.lower() in lower_text:
@@ -136,15 +131,7 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
  
     if safe_hits:
         effective_threshold = max(threshold, 0.72)
-
-    edu_hits = []
-    for kw in EDU_SAFE:
-        if kw in lower_text:
-            edu_hits.append(kw)
-
-    if edu_hits:
-        effective_threshold = max(threshold, 0.7)
-
+ 
 
     TELECOM_BRANDS = [
         "viettel", "vinaphone", "mobifone", "vietnamobile", "gmobile", "vnpt",
@@ -165,20 +152,12 @@ def predict_text(text: str, threshold: float = THRESHOLD) -> dict:
         scam_prob         = scam_prob_display
         confidence        = clean_prob
     else:
-        if edu_hits and re.search(r"không thu.*phí|miễn phí", lower_text):
-            label = "CLEAN"
-            confidence = 0.9
-            scam_prob = scam_prob * 0.3
-            clean_prob = 1.0 - scam_prob
-        else:
-            label = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
-            confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
-            clean_prob = 1.0 - scam_prob
-    confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
-    clean_prob = 1.0 - scam_prob
-        
+        label      = "SCAM" if scam_prob >= effective_threshold else "CLEAN"
+        confidence = scam_prob if label == "SCAM" else 1.0 - scam_prob
+        clean_prob = 1.0 - scam_prob
+ 
     signals = _detect_signals(text, safe_hits=safe_hits)
-        
+ 
     result = {
         "label":      label,
         "scam_prob":  round(scam_prob * 100, 1),
@@ -221,7 +200,6 @@ _SIGNAL_CHECKS = [
                                                      "⚠️ Lừa đảo chuyển tiền / cho vay"),
     (r"liên hệ.*nhận tiền|ấn ngay.*nhận thưởng|click.*nhận ngay",
                                                      "⚠️ Lời kêu gọi hành động đáng ngờ"),
-    (r"không thu.*phí|miễn phí","✅ Không yêu cầu chi phí"),
 ]
  
 def _detect_signals(text: str, safe_hits: list = None) -> list:
