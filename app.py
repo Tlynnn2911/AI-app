@@ -208,7 +208,7 @@ def _detect_signals(text: str, safe_hits: list = None) -> list:
     for pattern, msg in _SIGNAL_CHECKS:
         if re.search(pattern, lower):
             signals.append(msg)
-    # Nếu có nguồn an toàn được nhận diện → thêm ghi chú tích cực
+
     return signals
  
  
@@ -628,6 +628,23 @@ async function analyze() {
     clearInterval(itv);
     document.getElementById(\'spinner\').classList.remove(\'show\');
     showResult(data);
+    // ── Lưu vào DB và cập nhật bảng mẫu ──
+    const saved = await fetch('/save_message', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text: text, label: data.label })
+    });
+    const savedJson = await saved.json();
+    if (savedJson.status === 'saved') {
+      // Thêm vào đầu DB_DATA để hiển thị ngay trên bảng
+      DB_DATA.unshift({
+        Sub_Content: text,
+        Label:       data.label,
+        Reason:      'Người dùng gửi kiểm tra'
+      });
+      dbPage = 1;
+      renderDB();  // Làm mới bảng tin nhắn mẫu
+    }
   } catch(e) {
     clearInterval(itv);
     document.getElementById(\'spinner\').classList.remove(\'show\');
@@ -774,6 +791,28 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
  
+@app.route("/save_message", methods=["POST"])
+def save_message():
+    """Lưu tin nhắn người dùng kiểm tra vào data.csv và cập nhật DB_DATA."""
+    global df_data
+    data  = request.get_json()
+    text  = (data or {}).get("text", "").strip()
+    label = (data or {}).get("label", "").strip().upper()   # SCAM / CLEAN
+    if not text or label not in ("SCAM", "CLEAN"):
+        return jsonify({"error": "Thiếu nội dung hoặc nhãn"}), 400
+
+    # Tránh lưu trùng
+    if text in df_data["Sub_Content"].values:
+        return jsonify({"status": "duplicate"})
+
+    new_row = pd.DataFrame([{
+        "Sub_Content": text,
+        "Label":       label,
+        "Reason":      "Người dùng gửi kiểm tra"
+    }])
+    df_data = pd.concat([df_data, new_row], ignore_index=True)
+    df_data.to_csv(DATA_FILE, index=False, encoding="utf-8")
+    return jsonify({"status": "saved"})
  
 @app.route("/predict_batch", methods=["POST"])
 def predict_batch():
